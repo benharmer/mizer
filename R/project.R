@@ -114,7 +114,7 @@ setMethod('project', signature(object='MizerParams', effort='missing'),
 #' Project with a constant effort.
 #' @rdname project
 setMethod('project', signature(object='MizerParams', effort='numeric'),
-    function(object, effort,  t_max = 100, dt = 0.1, ...){
+    function(object, effort,  t_max = 1000, dt = 1/120, ...){
 	no_gears <- dim(object@catchability)[1]
 	if ((length(effort)>1) & (length(effort) != no_gears))
 	    stop("Effort vector must be the same length as the number of fishing gears\n")
@@ -138,7 +138,7 @@ setMethod('project', signature(object='MizerParams', effort='numeric'),
 #' Project with time varying effort
 #' @rdname project
 setMethod('project', signature(object='MizerParams', effort='array'),
-    function(object, effort, t_save=1, dt=0.1, initial_n=object@initial_n, 
+    function(object, effort, plankton, t_save=1, dt=1/120, initial_n=object@initial_n, 
              initial_n_pp=object@initial_n_pp, shiny_progress = NULL, ...){
         validObject(object)
         # Check that number and names of gears in effort array is same as in MizerParams object
@@ -229,7 +229,7 @@ setMethod('project', signature(object='MizerParams', effort='array'),
             shiny_progress$set(message = "Running simulation", value = 0)
             proginc <- 1/length(t_dimnames_index)
         }
-        for (i_time in 1:t_steps){
+        for (i_time in 1:t_steps){ 
             # Do it piece by piece to save repeatedly calling methods
             # Calculate amount E_{a,i}(w) of available food
             phi_prey <- getPhiPrey(sim@params, n=n, n_pp=n_pp)
@@ -275,11 +275,55 @@ setMethod('project', signature(object='MizerParams', effort='array'),
             n <- inner_project_loop(no_sp=no_sp, no_w=no_w, n=n, A=A, B=B, S=S,
                                     w_min_idx=sim@params@species_params$w_min_idx)
 
-            # Dynamics of background spectrum uses a semi-chemostat model (de Roos - ask Ken)
-            # We use the exact solution under the assumption of constant mortality during timestep
-            tmp <- (sim@params@rr_pp * sim@params@cc_pp / (sim@params@rr_pp + m2_background))
-            n_pp <- tmp - (tmp - n_pp) * exp(-(sim@params@rr_pp+m2_background)*dt)
-
+            
+            if (plankton == "Normal"){
+              # Dynamics of background spectrum uses a semi-chemostat model (de Roos - ask Ken)
+              # We use the exact solution under the assumption of constant mortality during timestep
+              tmp <- (sim@params@rr_pp * sim@params@cc_pp / (sim@params@rr_pp + m2_background))
+              n_pp <- tmp - (tmp - n_pp) * exp(-(sim@params@rr_pp+m2_background)*dt)
+            }
+            
+            if (plankton == "Seasonal"){
+              # Forced seasonal growth in plankton using the Semi-Chemostat Model
+              tmp <- (sim@params@rr_pp * sim@params@cc_pp) / (sim@params@rr_pp + m2_background)
+              n_pp <- tmp - (tmp - n_pp) * exp(-(sim@params@rr_pp+m2_background)*(dt+(1/(2*pi*i_time)*sin(i_time*2*pi*dt))))
+              n_pp[n_pp==Inf] <- 0
+              n_pp[is.nan(n_pp)] <- 0
+            }
+             
+            if (plankton == "Refined"){
+              # Upgraded semi chemostat 
+              firstterm <- (sim@params@rr_pp*sim@params@cc_pp*(1+cos(i_time*2*pi*dt)))/(m2_background+sim@params@rr_pp*(1+cos(i_time*2*pi*dt)))
+              secondterm <- (n_pp*(2*sim@params@rr_pp + m2_background)-2*sim@params@rr_pp*sim@params@cc_pp)/(2*sim@params@rr_pp + m2_background)
+              exponential <- exp(-((sim@params@rr_pp + m2_background)*dt+((sim@params@rr_pp)/(2*pi*i_time))*sin(i_time*2*pi*dt)))
+             n_pp <- firstterm + secondterm * exponential 
+              n_pp[n_pp==Inf] <- 0
+             n_pp[is.nan(n_pp)] <- 0 
+            }
+            
+            if (plankton == "Carrying"){
+              # Upgraded semi chemostat 
+                alpha <- 2*pi*i_time
+                firstterm <- 1/(sim@params@rr_pp+m2_background)
+                bottom <- (sim@params@rr_pp+m2_background)^2+(alpha)^2
+                top <- (sin(alpha*dt)*(sim@params@rr_pp+m2_background)-(alpha*cos(alpha*dt)))
+                multiplier <- sim@params@rr_pp*sim@params@cc_pp
+                exponential <- exp(-(sim@params@rr_pp+m2_background)*dt)
+                n_pp <- multiplier*(firstterm + 2*top/bottom) + (n_pp-multiplier*(firstterm-(alpha)/bottom)) * exponential
+                n_pp[n_pp==Inf] <- 0
+                n_pp[is.nan(n_pp)] <- 0 
+            }
+  
+            if (plankton == "Logistic"){
+              # Dynamics of background spectrum uses a logistic model
+              # We use the exact solution under the assumption of constant mortality during timestep
+              top <- n_pp*(sim@params@rr_pp*sim@params@cc_pp - m2_background)
+              bottom <- (sim@params@rr_pp*sim@params@cc_pp-(sim@params@rr_pp*n_pp)-m2_background)*exp(-dt*(sim@params@rr_pp*sim@params@cc_pp-m2_background))+sim@params@rr_pp*n_pp
+              n_pp <- top/bottom
+              n_pp[n_pp==Inf] <- 0
+              n_pp[is.nan(n_pp)] <- 0
+            }
+             
             # Store results only every t_step steps.
             store <- t_dimnames_index %in% (i_time+1)
             if (any(store)){

@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/493863/e370137a566740c8bd269a175b8a2078
+bundleId: https://api.rpubs.com/api/v1/document/493863/e370137a566740c8bd269a175b8a2078
+url: http://rpubs.com/benharmer/493863
+when: 1557179717.53671

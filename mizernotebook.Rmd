@@ -1,0 +1,246 @@
+---
+title: "Mizer Notebook"
+author: "Ben Harmer"
+output:
+  html_document:
+    df_print: paged
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+Before running this code, I want to highlight to the user what changes I have made to the mizer code. Firstly, open the project.R file and find line 141. I have added the "plankton" variable into the function. Now scroll down to lines 279-304. Here we can see the four different plankton growth rates and the user can decide which one they want to use when running the simulation. This is extremely convenient compared to manually changing the code and building the project again.
+
+```{r}
+# Load Library
+library(mizer)
+params <- set_community_model(z0 = 0.1, f0 = 0.7, alpha = 0.2, recruitment = 4e7)
+logistic <- project(params, effort = 0, t_max = 100, t_save = 1/12, plankton = "Logistic")
+refined <- project(params, effort = 0, t_max = 100, t_save = 1/12, plankton = "Refined")
+normal <- project(params, effort = 0, t_max = 100, t_save = 1/12, plankton = "Normal")
+seasonal <- project(params, effort = 0, t_max = 100, t_save = 1/12, plankton = "Seasonal")
+carrying <- project(params, effort = 0, t_max = 100, t_save = 1/12, plankton = "Carrying")
+# These commands project mizer using the four different plankton growth rates 
+```
+
+```{r}
+# Plots the Biomass Density of the logistic and normal semi-chemostat models after 100 years
+
+densitynormal <- normal@n[1201,,] # Biomass density of the normal semi-chemostat equation at time step 601 (50 years)
+densitylogistic <- logistic@n[1201,,] # Biomass density of the logistic equation at time step 601 (50 years)
+plot(x=normal@params@w, y = densitynormal, log = "xy", type = "n", xlab = "Size(g)",
+	 ylab = "Biomass Density") # Creates axes
+legend("topright", legend = c("Logistic", "Normal"), lty = 1:2) # Creates legend
+lines(x=normal@params@w, y = densitylogistic, lty = 1) # Plots logistic biomass density
+lines(x=normal@params@w, y = densitynormal, lty = 2) # Plots normal biomass density
+```
+
+```{r}
+# Plots the relative abundance of the logistic model vs the semi-chemostat model after 100 years
+
+relative_abundance <- logistic@n[1201,,] / normal@n[1201,,] # Computes relative abundance of logistic biomass density relative to normal semi-chemo density after 50 years
+plot(x=normal@params@w, y=relative_abundance, log="xy", type="n", xlab = "Size (g)", ylab="Relative abundance") # Creates axes
+lines(x=normal@params@w, y=relative_abundance) # Plots the relative abundance
+lines(x=c(min(normal@params@w),max(normal@params@w)), y=c(1,1),lty=2) # Plots the straight semi-chemo line
+```
+
+```{r}
+# Plots the Biomass Density of the seasonal semi-chemostat and normal semi-chemostat models after 100 years
+
+densitynormal <- normal@n[1201,,] # Biomass density of the normal semi-chemostat equation at time step 1201 (100 years)
+densityseasonal <- seasonal@n[1201,,] # Biomass density of the seasonal semi-chemostat equation at time step 1201 (100 years)
+plot(x=normal@params@w, y = densitynormal, log = "xy", type = "n", xlab = "Size(g)", ylab = "Biomass Density") # Creates axes
+legend("topright", legend = c("Seasonal", "Normal"), lty = 1:2) #Creates legend
+lines(x=normal@params@w, y = densityseasonal, lty = 1) # Plots seasonal semi-chemo biomass density
+lines(x=normal@params@w, y = densitynormal, lty = 2) # Plots normal semi-chemo biomass density
+```
+
+```{r}
+# Plots the relative abundance of the seasonal semi-chemostat model vs the semi-chemostat model after 100 years
+
+relative_abundance <- seasonal@n[1201,,] / normal@n[1201,,] # Computes relative abundance of logistic biomass density relative to normal semi-chemo density after 100 years
+plot(x=normal@params@w, y=relative_abundance, log="xy", type="n", xlab = "Size (g)", ylab="Relative abundance") # Creates axes
+lines(x=normal@params@w, y=relative_abundance) # Plots relative abundance line
+lines(x=c(min(normal@params@w),max(normal@params@w)), y=c(1,1),lty=2) # Plots straight semi-chemo line
+```
+
+```{r}
+# Plots the biomass density of the refined model at the last time-step.
+
+densitynormal <- normal@n[1201,,] # Biomass density of the normal semi-chemostat equation at time step 1201 (100 years)
+densityseasonal <- carrying@n[1201,,] # Biomass density of the refined semi-chemostat equation at time step 1201 (100 years)
+plot(x=normal@params@w, y = densitynormal, log = "xy", type = "n", xlab = "Size(g)", ylab = "Biomass Density") # Creates axes
+legend("topright", legend = c("Refined", "Normal"), lty = 1:2) #Creates legend
+lines(x=normal@params@w, y = densityseasonal, lty = 1) # Plots refined semi-chemo biomass density
+lines(x=normal@params@w, y = densitynormal, lty = 2) # Plots normal semi-chemo biomass density
+```
+
+```{r}
+# Creates a 3D plot of the Biomass density. Note that the axes are in log. 
+# I encourage the user to move the plot around to see the wave from different angles. 
+library(plotly)
+
+refinedmatrix <- matrix(, nrow = 100, ncol = 50)
+for (i in 1:50){
+  densityrefined <- carrying@n[i+1151,,]
+  refinedmatrix[,i] <- densityrefined
+}
+axz <- list(
+    title = 'Log Biomass Density'
+)
+axx <- list(
+    title = 'Time-step'
+)
+axy <- list(
+    title = 'Log Size (g)'
+)
+p <- plot_ly(type = 'surface',z = ~log(refinedmatrix), y = log(refined@params@w))%>%
+     layout(scene = list(zaxis=axz, yaxis = axy, xaxis = axx))
+p
+
+```
+
+
+```{r}
+# Plots the relative abundance after every month from year 99 to 100 of the refined model vs 
+# the normal semi-chemostat model, my paper uses every other time step!
+
+for (i in 1:12){ # Creates a loop to plot the year 99-100 of the simulation 
+    relative_abundance <- carrying@n[i+1188,,] / normal@n[i+1188,,] # Relative abundance of the refined model vs the nomral semi-chemo model
+     plot(x=normal@params@w, y=relative_abundance, log="x", type="n", xlab = "Size (g)", ylab="Relative abundance", ylim=c(0.5,1.5)) # Creates axes
+     lines(x=normal@params@w, y=relative_abundance) # PLots relative abundance 
+     lines(x=c(min(normal@params@w),max(normal@params@w)), y=c(1,1),lty=2) # Plots straight line
+     Sys.sleep(0.5) # System sleep for 0.5 seconds
+ }
+```
+
+```{r}
+# Creates a 3d plot of the relative abundances.
+# I encourage the user to move the plot around to see the wave from different angles. 
+abundancematrix <- matrix(, nrow = 100, ncol = 50)
+axz <- list(
+    title = 'Relative Abundance'
+    #range = c(0.999,1.02)
+)
+for (i in 1:50){
+  abundancerefined <- carrying@n[i+1151,,]/normal@n[i+1151,,]
+  abundancematrix[,i] <- abundancerefined
+}
+p <- plot_ly(type = 'surface',z = ~(abundancematrix), y = log(normal@params@w))%>%
+     layout(scene = list(zaxis=axz, yaxis = axy, xaxis = axx))
+p
+
+
+```
+
+```{r}
+# This plot has been created just for fun. It is the first 100 months of the simulation. We see that as the population of the plankton quickly increases (also boosted by the sine wave) we see huge boosts in fish populations. The first huge spike propogates throughout the whole size spectrum. 
+abundancematrix <- matrix(, nrow = 100, ncol = 300)
+axz <- list(
+    title = 'Relative Abundance'
+    #range = c(0,5)
+)
+for (i in 1:300){
+  abundancerefined <- carrying@n[i,,]/normal@n[i,,]
+  abundancematrix[,i] <- abundancerefined
+}
+p <- plot_ly(type = 'surface',z = ~(abundancematrix), y = log(normal@params@w))%>%
+     layout(scene = list(zaxis=axz, yaxis = axy, xaxis = axx))
+p
+```
+
+```{r}
+# Computes the position of the wave
+  
+for (l in 1:13){ # Creates a loop to plot the year 98-100 of the simulation
+      refinedaverage = vector(length =100)
+      for(i in 1:99){ # Creates loop through the 100 different sizes the simulation uses
+         yes = vector(length = 100) # Initiates a vector of length 100
+         yes[1] = 100 # Place 1 is marked as 100
+         yes[100] = 100 # Place 100 is marked as 100
+         refinedaverage[i] = carrying@n[1188+l,,][i]/normal@n[1188+l,,][i]-carrying@n[1188+l,,][i+1]/normal@n[1188+l,,][i+1] # Computes the difference between the current size and the next size up at the specified time step.
+         for (k in 2:99){
+             if (refinedaverage[k]>refinedaverage[k-1]){ 
+                 yes[k] = k # If the difference is larger at the current size than it was in the previous size then mark the entry in yes as the size.
+             }
+             else{
+                 yes[k] = 100 # If not, mark the current entry in the yes vector as 100
+             }
+         }
+      }
+    print(which(yes < 50)) # Print values that are less than 50, this prints the trough of the wave and a few size steps after it. We only want to follow the wave in the first half of the graph.
+}
+```
+
+```{r}
+# Computes the biomass density and the size of the peak of the wave at each time step. 
+
+carrying@n[1189,,][6]
+carrying@n[1190,,][9]
+carrying@n[1191,,][12] 
+carrying@n[1192,,][14] 
+carrying@n[1193,,][16]
+carrying@n[1194,,][17]
+carrying@n[1195,,][19]
+carrying@n[1196,,][21]
+carrying@n[1197,,][22]
+carrying@n[1198,,][24]
+carrying@n[1199,,][25]
+carrying@n[1200,,][3]
+```
+```{r} 
+# Plots the average wave speed at each time-step during the last year of simulation.
+xaxis = c(0.01596, 0.02988, 0.05592, 0.0624, 0.0948, 0.0648, 0.1776, 0.27, 0.1836, 0.5028, 0.348)
+time <- 0:10
+lin.mod2 <- lm(xaxis~I(time^2)+time)
+pr.lm2 <- predict(lin.mod2)
+plot(time, xaxis, "l", las=1, xlab="Time", ylab="Wave Speed")
+lines(pr.lm2~time, col="red", lwd=2)
+```
+
+```{r}
+# This computes the difference in the biomass density at each size of the refined semi-chemostat model at each time step 
+
+for (i in 1:12){ 
+     refinedaverage = 0
+     yes = vector(length=100)
+     refinedaverage = (carrying@n[i+1188,,]-carrying@n[i+1189,,])
+     nam <- paste("A", i, sep = "") # Creates 12 different vectors (one for each timestep)
+     for (k in 1:100){
+         if (refinedaverage[k] < 1e-4){ # If the difference is < 0.001g then denote size with a 1
+             yes[k] = 1
+             assign(nam, yes)
+         }
+         else { # Otherwise denote with a 0
+             yes[k] = 0
+             assign(nam, yes)
+         }
+     }
+ }
+TOTAL = rbind(A1,A2,A3, A4, A5, A6, A7, A8, A9,A10, A11, A12) # Create one big table 
+Total = rbind(TOTAL, colMeans(TOTAL)) # Compute column means
+min(which(Total[13,] == 1)) # Compute the lowest size at which the column mean is 1 (meaning at every time-step the variation is less than 0.001g) 
+```
+
+```{r}
+# Plots the biomass density over the course of the year at which there is minimum oscillation
+
+noeffect = vector(length = 13)
+for (i in 1:13){
+  noeffect[i] = refined@n[1188+i,,][55] # Stores the value of the biomass density at size 56 throughtout the year 
+}
+plot(noeffect, xlab = "Time-step", ylab = "Biomass Density")
+difference = max(noeffect) - min(noeffect) # Computes the difference between highest and lowest point
+percentage = difference*100/min(noeffect) # Computes the percentage difference between the highest and lowest points.
+difference # Outputs the difference
+percentage
+```
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
